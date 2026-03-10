@@ -66,7 +66,7 @@ impl Widget for &App {
     where
         Self: Sized,
     {
-        let title = Line::from("pommo").bold();
+        let title = Line::from(" pommo ").bold();
 
         let instructions = Line::from(vec![
             " Start ".into(),
