@@ -1,5 +1,6 @@
-use std::{io, time::Duration};
+use std::time::Duration;
 
+use color_eyre::eyre::{Context, Result, bail};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
@@ -11,9 +12,11 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-fn main() -> color_eyre::Result<()> {
+fn main() -> Result<()> {
     color_eyre::install()?;
+
     ratatui::run(|terminal| App::default().run(terminal))?;
+
     Ok(())
 }
 
@@ -25,11 +28,12 @@ pub struct App {
 }
 
 impl App {
-    fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+    fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
         while !self.exit {
             terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
+            self.handle_events().wrap_err("handling event failed")?;
         }
+
         Ok(())
     }
 
@@ -37,23 +41,25 @@ impl App {
         frame.render_widget(self, frame.area());
     }
 
-    fn handle_events(&mut self) -> io::Result<()> {
+    fn handle_events(&mut self) -> Result<()> {
         match event::read()? {
             // it's important to check that the event is a key press event as
             // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
-            }
-            _ => {}
-        };
-        Ok(())
+            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => self
+                .handle_key_event(key_event)
+                .wrap_err_with(|| format!("handling key event failed:\n{key_event:#?}")),
+            _ => Ok(()),
+        }
     }
 
-    fn handle_key_event(&mut self, key_event: event::KeyEvent) {
+    fn handle_key_event(&mut self, key_event: event::KeyEvent) -> Result<()> {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
+            KeyCode::Char('p') => bail!("panic button pressed!"),
             _ => {}
         }
+
+        Ok(())
     }
 
     fn exit(&mut self) {
