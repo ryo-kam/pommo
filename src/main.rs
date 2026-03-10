@@ -1,3 +1,5 @@
+mod timer;
+
 use std::time::Duration;
 
 use color_eyre::eyre::{Context, Result, bail};
