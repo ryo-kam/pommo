@@ -80,7 +80,7 @@ impl Widget for &App {
 
         let block = Block::bordered()
             .title(title.centered())
-            .title_bottom(instructions)
+            .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
         let time_left = self.duration.abs_diff(self.time_elapsed).as_secs();
