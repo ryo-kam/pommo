@@ -1,3 +1,5 @@
+mod timer;
+
 use std::{io, time::Duration};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
