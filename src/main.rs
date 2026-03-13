@@ -1,7 +1,5 @@
 mod timer;
 
-use std::time::Duration;
-
 use color_eyre::eyre::{Context, Result, bail};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -24,8 +22,6 @@ fn main() -> Result<()> {
 
 #[derive(Debug, Default)]
 pub struct App {
-    duration: Duration,
-    time_elapsed: Duration,
     exit: bool,
 }
 
@@ -91,14 +87,7 @@ impl Widget for &App {
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        let time_left = self.duration.abs_diff(self.time_elapsed).as_secs();
-        let time_left_mins = time_left / 60;
-        let time_left_secs = time_left % 60;
-
-        let main_text = Text::from(vec![Line::from(vec![
-            "Timer: ".into(),
-            format!("{time_left_mins:0<2}:{time_left_secs:0<2}").yellow(),
-        ])]);
+        let main_text = Text::from(vec![Line::from(vec!["Timer: ".into()])]);
 
         Paragraph::new(main_text)
             .centered()
