@@ -2,12 +2,14 @@
 
 use std::time::Instant;
 
+#[derive(Debug)]
 pub enum TimerCommandType {
     Start,
     Pause,
     End,
 }
 
+#[derive(Debug)]
 pub struct TimerCommand {
     pub command_type: TimerCommandType,
     pub invoked_at: Instant,

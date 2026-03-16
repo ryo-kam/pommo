@@ -1,5 +1,7 @@
 mod timer;
 
+use std::time::Duration;
+
 use color_eyre::eyre::{Context, Result, bail};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -12,22 +14,32 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
+use crate::timer::{Timer, TimerState};
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
-    ratatui::run(|terminal| App::default().run(terminal))?;
+    ratatui::run(|terminal| App::new().run(terminal))?;
 
     Ok(())
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct App {
-    exit: bool,
+    timer: Timer,
+    is_running: bool,
 }
 
 impl App {
+    fn new() -> Self {
+        Self {
+            timer: Timer::new(Duration::from_mins(5)),
+            is_running: true,
+        }
+    }
+
     fn run(&mut self, terminal: &mut DefaultTerminal) -> Result<()> {
-        while !self.exit {
+        while self.is_running {
             terminal.draw(|frame| self.draw(frame))?;
             self.handle_events().wrap_err("handling event failed")?;
         }
@@ -35,7 +47,7 @@ impl App {
         Ok(())
     }
 
-    fn draw(&self, frame: &mut Frame) {
+    fn draw(&mut self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
     }
 
@@ -54,18 +66,28 @@ impl App {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Char('p') => bail!("panic button pressed!"),
+            KeyCode::Char('s') => self.toggle_timer(),
             _ => {}
-        }
+        };
 
         Ok(())
     }
 
     fn exit(&mut self) {
-        self.exit = true;
+        self.is_running = false;
+    }
+
+    fn toggle_timer(&mut self) {
+        match self.timer.get_timer_state() {
+            TimerState::Paused => self.timer.start(),
+            TimerState::Ticking { .. } => self.timer.pause(),
+            TimerState::Finished => Ok(()),
+        }
+        .unwrap();
     }
 }
 
-impl Widget for &App {
+impl Widget for &mut App {
     fn render(self, area: Rect, buf: &mut Buffer)
     where
         Self: Sized,
@@ -73,10 +95,8 @@ impl Widget for &App {
         let title = Line::from(" pommo ").bold();
 
         let instructions = Line::from(vec![
-            " Start ".into(),
-            "<R>".blue().bold(),
-            " Pause ".into(),
-            "<T>".red().bold(),
+            " Start/Stop ".into(),
+            "<S>".blue().bold(),
             " Quit ".into(),
             "<Q>".gray().bold(),
             " ".into(),
@@ -87,7 +107,15 @@ impl Widget for &App {
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        let main_text = Text::from(vec![Line::from(vec!["Timer: ".into()])]);
+        let time_left = self.timer.get_time_left().as_secs();
+
+        let mins_left = time_left / 60;
+        let secs_left = time_left % 60;
+
+        let main_text = Text::from(vec![Line::from(vec![
+            "Timer: ".into(),
+            format!("{:0>2}:{:0>2}", mins_left, secs_left).into(),
+        ])]);
 
         Paragraph::new(main_text)
             .centered()
