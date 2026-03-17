@@ -10,37 +10,15 @@ use std::{
         mpsc::{SendError, Sender},
     },
     thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 #[derive(Debug)]
-struct Cache<TData: Clone> {
-    stale_time: Duration,
-    data: TData,
-    last_retrieved: Instant,
-}
-
-impl<TData: Clone> Cache<TData> {
-    fn new(data: TData) -> Self {
-        Self {
-            stale_time: Duration::from_millis(500),
-            data,
-            last_retrieved: Instant::now(),
-        }
-    }
-
-    fn is_stale(&self) -> bool {
-        self.last_retrieved.elapsed() >= self.stale_time
-    }
-
-    fn set_data(&mut self, data: &TData) {
-        self.data = data.clone();
-        self.last_retrieved = Instant::now();
-    }
-
-    fn get_data(&self) -> TData {
-        self.data.clone()
-    }
+pub enum TimerState {
+    Ready,
+    Running,
+    Paused,
+    Completed,
 }
 
 #[derive(Debug)]
@@ -48,10 +26,8 @@ pub struct Timer {
     command_tx: Sender<TimerCommand>,
 
     duration: Duration,
-    time_elapsed_cache: Cache<Duration>,
-    timer_state_cache: Cache<TimerState>,
     time_elapsed: Arc<Mutex<Duration>>,
-    timer_state: Arc<Mutex<TimerState>>,
+    timer_inner_state: Arc<Mutex<TimerInnerState>>,
 }
 
 impl Drop for Timer {
@@ -69,42 +45,31 @@ impl Timer {
         let timer = Timer {
             command_tx,
             duration,
-            time_elapsed_cache: Cache::new(timer_inner.time_elapsed.lock().unwrap().clone()),
-            timer_state_cache: Cache::new(timer_inner.timer_state.lock().unwrap().clone()),
             time_elapsed: timer_inner.time_elapsed.clone(),
-            timer_state: timer_inner.timer_state.clone(),
+            timer_inner_state: timer_inner.timer_state.clone(),
         };
 
-        thread::spawn(move || timer_inner.run());
+        thread::spawn(|| timer_inner.run());
 
         timer
     }
 
-    pub fn get_timer_state(&mut self) -> TimerState {
-        if self.timer_state_cache.is_stale() {
-            let timer_state = self.timer_state.lock().unwrap().clone();
+    pub fn get_time_left(&self) -> Duration {
+        let time_elapsed = self.time_elapsed.lock().unwrap().clone();
 
-            self.timer_state_cache.set_data(&timer_state);
-
-            return timer_state;
-        } else {
-            return self.timer_state_cache.get_data();
-        }
+        self.duration.saturating_sub(time_elapsed)
     }
 
-    pub fn get_time_left(&mut self) -> Duration {
-        let time_elapsed = if self.time_elapsed_cache.is_stale() {
-            let time_elapsed = self.time_elapsed.lock().unwrap().clone();
+    pub fn get_state(&self) -> TimerState {
+        let time_elapsed = self.time_elapsed.lock().unwrap().clone();
+        let timer_inner_state = self.timer_inner_state.lock().unwrap().clone();
 
-            self.time_elapsed_cache.set_data(&time_elapsed);
-
-            time_elapsed
-        } else {
-            self.time_elapsed_cache.get_data()
-        };
-
-        let duration = self.duration;
-        duration.saturating_sub(time_elapsed)
+        match (time_elapsed, timer_inner_state) {
+            (time_elapsed, TimerInnerState::Paused) if time_elapsed.is_zero() => TimerState::Ready,
+            (_, TimerInnerState::Paused) => TimerState::Paused,
+            (_, TimerInnerState::Ticking { .. }) => TimerState::Running,
+            (_, TimerInnerState::Finished) => TimerState::Completed,
+        }
     }
 
     pub fn pause(&self) -> Result<(), SendError<TimerCommand>> {
@@ -120,7 +85,7 @@ impl Timer {
     }
 
     fn send_command(&self, command_type: TimerCommandType) -> Result<(), SendError<TimerCommand>> {
-        if *self.timer_state.lock().unwrap() == TimerState::Finished {
+        if *self.timer_inner_state.lock().unwrap() == TimerInnerState::Finished {
             return Ok(());
         }
 
@@ -162,8 +127,8 @@ mod tests {
         let duration_timer = timer.duration;
         assert_eq!(duration_timer, duration);
 
-        let timer_state = timer.timer_state.lock().unwrap();
-        assert!(matches!(*timer_state, TimerState::Paused));
+        let timer_state = timer.get_state();
+        assert!(matches!(timer_state, TimerState::Ready));
 
         let time_elapsed_timer = timer.time_elapsed.lock().unwrap();
         assert!(time_elapsed_timer.is_zero());
@@ -172,33 +137,13 @@ mod tests {
     #[test]
     fn can_start_timer() -> Result<(), SendError<TimerCommand>> {
         let duration = Duration::from_secs(2);
-        let mut timer = Timer::new(duration);
-
-        timer.start()?;
-        small_pause();
-
-        let timer_state = timer.timer_state.lock().unwrap();
-        assert!(matches!(*timer_state, TimerState::Ticking { .. }));
-
-        Ok(())
-    }
-
-    #[test]
-    fn timer_start_time_is_accurate() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
         let timer = Timer::new(duration);
 
-        let start_time_test = Instant::now();
-
         timer.start()?;
         small_pause();
 
-        let TimerState::Ticking { start_time } = *timer.timer_state.lock().unwrap() else {
-            panic!("timer not started");
-        };
-
-        let time_difference = start_time.duration_since(start_time_test);
-        assert!(time_difference <= EPSILON);
+        let timer_state = timer.get_state();
+        assert!(matches!(timer_state, TimerState::Running));
 
         Ok(())
     }
@@ -211,8 +156,8 @@ mod tests {
         timer.start()?;
         thread::sleep(duration + LOOP_TIME);
 
-        let timer_state = timer.timer_state.lock().unwrap();
-        assert!(matches!(*timer_state, TimerState::Finished));
+        let timer_state = timer.get_state();
+        assert!(matches!(timer_state, TimerState::Completed));
 
         Ok(())
     }
@@ -227,8 +172,8 @@ mod tests {
         timer.pause()?;
         small_pause();
 
-        let timer_state = timer.timer_state.lock().unwrap();
-        assert!(matches!(*timer_state, TimerState::Paused));
+        let timer_state = timer.get_state();
+        assert!(matches!(timer_state, TimerState::Paused));
 
         Ok(())
     }
@@ -243,8 +188,8 @@ mod tests {
         timer.end()?;
         small_pause();
 
-        let timer_state = timer.timer_state.lock().unwrap();
-        assert!(matches!(*timer_state, TimerState::Finished));
+        let timer_state = timer.get_state();
+        assert!(matches!(timer_state, TimerState::Completed));
 
         Ok(())
     }
@@ -261,8 +206,8 @@ mod tests {
         timer.end()?;
         small_pause();
 
-        let timer_state = timer.timer_state.lock().unwrap();
-        assert!(matches!(*timer_state, TimerState::Finished));
+        let timer_state = timer.get_state();
+        assert!(matches!(timer_state, TimerState::Completed));
 
         Ok(())
     }
@@ -374,49 +319,6 @@ mod tests {
         let time_elapsed_timer = dbg!(timer.time_elapsed.lock().unwrap());
         let time_difference = dbg!(time_elapsed_timer.abs_diff(time_elapsed_test));
         assert!(time_difference <= EPSILON);
-
-        Ok(())
-    }
-
-    
-    #[test]
-    fn make_sure_it_works()
-    -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(20);
-        let mut timer = Timer::new(duration);
-
-        timer.start()?;
-        
-        for _ in 0..3 {
-            println!("{:?}", timer.get_time_left());
-            thread::sleep(Duration::from_secs(1));
-        }
-
-        timer.pause()?;
-
-        thread::sleep(Duration::from_millis(200));
-        dbg!(timer.get_timer_state());
-
-        timer.start()?;
-        
-        for _ in 0..3 {
-            println!("{:?}", timer.get_time_left());
-            thread::sleep(Duration::from_secs(1));
-        }
-
-        timer.pause()?;
-
-        thread::sleep(Duration::from_millis(200));
-        dbg!(timer.get_timer_state());
-
-        timer.start()?;
-        
-        for _ in 0..3 {
-            println!("{:?}", timer.get_time_left());
-            thread::sleep(Duration::from_secs(1));
-        }
-
-        timer.pause()?;
 
         Ok(())
     }

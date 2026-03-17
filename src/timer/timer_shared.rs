@@ -23,10 +23,3 @@ impl TimerCommand {
         }
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum TimerState {
-    Ticking { start_time: Instant },
-    Paused,
-    Finished,
-}

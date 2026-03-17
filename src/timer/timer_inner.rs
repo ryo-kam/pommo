@@ -11,6 +11,13 @@ use std::{
 // the loop pause duration when ticking
 const LOOP_TIME: Duration = Duration::from_millis(10);
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum TimerInnerState {
+    Ticking { start_time: Instant },
+    Paused,
+    Finished,
+}
+
 pub struct TimerInner {
     command_rx: Receiver<TimerCommand>,
 
@@ -18,7 +25,7 @@ pub struct TimerInner {
 
     time_elapsed_previous_intervals: Duration,
     pub time_elapsed: Arc<Mutex<Duration>>,
-    pub timer_state: Arc<Mutex<TimerState>>,
+    pub timer_state: Arc<Mutex<TimerInnerState>>,
 }
 
 // use a result so we can use ? syntax
@@ -36,7 +43,7 @@ impl TimerInner {
         let (command_tx, command_rx) = channel::<TimerCommand>();
 
         let time_elapsed = Arc::new(Mutex::new(Duration::ZERO));
-        let timer_state = Arc::new(Mutex::new(TimerState::Paused));
+        let timer_state = Arc::new(Mutex::new(TimerInnerState::Paused));
 
         (
             Self {
@@ -68,11 +75,11 @@ impl TimerInner {
 
         let command_result = match current_state {
             // check for next command but don't wait when timer is ticking
-            TimerState::Ticking { .. } => self.check_for_next_command()?,
+            TimerInnerState::Ticking { .. } => self.check_for_next_command()?,
             // block and wait for the next command when timer is paused
-            TimerState::Paused => Some(self.wait_for_next_command()?),
+            TimerInnerState::Paused => Some(self.wait_for_next_command()?),
             // exit without checking for a new message when the timer is finished
-            TimerState::Finished => {
+            TimerInnerState::Finished => {
                 return Ok(TickResult::Finished);
             }
         };
@@ -81,7 +88,7 @@ impl TimerInner {
         let tick_result = match (current_state, command_result) {
             // ticking -> paused
             (
-                TimerState::Ticking { start_time },
+                TimerInnerState::Ticking { start_time },
                 Some(TimerCommand {
                     command_type: TimerCommandType::Pause,
                     invoked_at,
@@ -89,23 +96,23 @@ impl TimerInner {
             ) => self.pause_timer(start_time, invoked_at),
             // ticking -> finished
             (
-                TimerState::Ticking { start_time },
+                TimerInnerState::Ticking { start_time },
                 Some(TimerCommand {
                     command_type: TimerCommandType::End,
                     invoked_at,
                 }),
             ) => self.end_timer(start_time, invoked_at),
             // ticking -> ticking
-            (TimerState::Ticking { start_time }, _) => self.increment_timer(start_time),
+            (TimerInnerState::Ticking { start_time }, _) => self.increment_timer(start_time),
             // paused -> ticking
             (
-                TimerState::Paused,
+                TimerInnerState::Paused,
                 Some(TimerCommand {
                     command_type: TimerCommandType::Start,
                     invoked_at,
                 }),
             ) => {
-                self.set_state(TimerState::Ticking {
+                self.set_state(TimerInnerState::Ticking {
                     start_time: invoked_at,
                 });
 
@@ -113,13 +120,13 @@ impl TimerInner {
             }
             // paused | finished -> finished
             (
-                TimerState::Paused | TimerState::Finished,
+                TimerInnerState::Paused | TimerInnerState::Finished,
                 Some(TimerCommand {
                     command_type: TimerCommandType::End,
                     ..
                 }),
             ) => {
-                self.set_state(TimerState::Finished);
+                self.set_state(TimerInnerState::Finished);
 
                 TickResult::Finished
             }
@@ -145,12 +152,12 @@ impl TimerInner {
         }
     }
 
-    fn get_state(&self) -> TimerState {
+    fn get_state(&self) -> TimerInnerState {
         let timer_state = self.timer_state.lock().unwrap();
         timer_state.clone()
     }
 
-    fn set_state(&self, timer_state: TimerState) {
+    fn set_state(&self, timer_state: TimerInnerState) {
         let mut current_timer_state = self.timer_state.lock().unwrap();
         *current_timer_state = timer_state;
     }
@@ -185,7 +192,7 @@ impl TimerInner {
             return TickResult::Finished;
         } else {
             self.time_elapsed_previous_intervals = new_total_time_elapsed;
-            self.set_state(TimerState::Paused);
+            self.set_state(TimerInnerState::Paused);
             return TickResult::Paused;
         }
     }
@@ -198,7 +205,7 @@ impl TimerInner {
         let time_elapsed_this_interval = invoked_at.duration_since(current_interval_start_time);
 
         self.add_time_elapsed(time_elapsed_this_interval);
-        self.set_state(TimerState::Finished);
+        self.set_state(TimerInnerState::Finished);
 
         return TickResult::Finished;
     }
@@ -215,7 +222,7 @@ impl TimerInner {
         let mut finished = false;
 
         if total_time_elapsed >= self.duration {
-            self.set_state(TimerState::Finished);
+            self.set_state(TimerInnerState::Finished);
             finished = true;
         }
 
