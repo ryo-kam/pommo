@@ -4,17 +4,17 @@ use crate::timer::{Timer, TimerState};
 
 const SHORT_BREAK: Pommo = Pommo {
     pommo_type: PommoType::Break,
-    duration: Duration::from_mins(10),
+    duration: Duration::from_mins(5),
 };
 
 const LONG_BREAK: Pommo = Pommo {
     pommo_type: PommoType::Break,
-    duration: Duration::from_mins(10),
+    duration: Duration::from_mins(30),
 };
 
 const WORK: Pommo = Pommo {
     pommo_type: PommoType::Work,
-    duration: Duration::from_mins(10),
+    duration: Duration::from_mins(25),
 };
 
 const POMMOS: &[Pommo] = &[
@@ -28,10 +28,9 @@ const POMMOS: &[Pommo] = &[
     LONG_BREAK,
 ];
 
-#[derive(Debug, Clone)]
 pub struct Pommo {
-    duration: Duration,
-    pommo_type: PommoType,
+    pub duration: Duration,
+    pub pommo_type: PommoType,
 }
 
 #[derive(Debug, Clone)]

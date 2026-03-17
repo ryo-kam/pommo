@@ -12,7 +12,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-use crate::pommo_core::PommoSession;
+use crate::pommo_core::{PommoSession, PommoType};
 
 #[derive(Debug)]
 pub struct PommoTui {
@@ -103,10 +103,15 @@ impl Widget for &mut PommoTui {
         let mins_left = time_left / 60;
         let secs_left = time_left % 60;
 
-        let main_text = Text::from(vec![Line::from(vec![
-            "Timer: ".into(),
-            format!("{:0>2}:{:0>2}", mins_left, secs_left).into(),
-        ])]);
+        let pommo_type = match &self.session.current_pommo().pommo_type {
+            PommoType::Break => "break",
+            PommoType::Work => "work",
+        };
+
+        let main_text = Text::from(vec![
+            Line::from(pommo_type),
+            Line::from(format!("{:0>2}:{:0>2}", mins_left, secs_left)),
+        ]);
 
         Paragraph::new(main_text)
             .centered()

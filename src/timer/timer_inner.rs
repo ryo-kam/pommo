@@ -162,11 +162,6 @@ impl TimerInner {
         *current_timer_state = timer_state;
     }
 
-    fn get_time_elapsed(&self) -> Duration {
-        let time_elapsed = self.time_elapsed.lock().unwrap();
-        time_elapsed.clone()
-    }
-
     fn increment_timer(&self, current_interval_start_time: Instant) -> TickResult {
         let time_elapsed_this_interval = current_interval_start_time.elapsed();
 
