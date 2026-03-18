@@ -55,13 +55,13 @@ impl Timer {
     }
 
     pub fn get_time_left(&self) -> Duration {
-        let time_elapsed = self.time_elapsed.lock().unwrap().clone();
+        let time_elapsed = *self.time_elapsed.lock().unwrap();
 
         self.duration.saturating_sub(time_elapsed)
     }
 
     pub fn get_state(&self) -> TimerState {
-        let time_elapsed = self.time_elapsed.lock().unwrap().clone();
+        let time_elapsed = *self.time_elapsed.lock().unwrap();
         let timer_inner_state = self.timer_inner_state.lock().unwrap().clone();
 
         match (time_elapsed, timer_inner_state) {

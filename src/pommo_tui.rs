@@ -20,6 +20,12 @@ pub struct PommoTui {
     is_running: bool,
 }
 
+impl Default for PommoTui {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PommoTui {
     pub fn new() -> Self {
         Self {

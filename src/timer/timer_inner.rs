@@ -168,9 +168,9 @@ impl TimerInner {
         let (_, finished) = self.add_time_elapsed(time_elapsed_this_interval);
 
         if finished {
-            return TickResult::Finished;
+            TickResult::Finished
         } else {
-            return TickResult::Continue;
+            TickResult::Continue
         }
     }
 
@@ -184,11 +184,11 @@ impl TimerInner {
         let (new_total_time_elapsed, finished) = self.add_time_elapsed(time_elapsed_this_interval);
 
         if finished {
-            return TickResult::Finished;
+            TickResult::Finished
         } else {
             self.time_elapsed_previous_intervals = new_total_time_elapsed;
             self.set_state(TimerInnerState::Paused);
-            return TickResult::Paused;
+            TickResult::Paused
         }
     }
 
@@ -202,14 +202,14 @@ impl TimerInner {
         self.add_time_elapsed(time_elapsed_this_interval);
         self.set_state(TimerInnerState::Finished);
 
-        return TickResult::Finished;
+        TickResult::Finished
     }
 
     fn add_time_elapsed(&self, time_elapsed: Duration) -> (Duration, bool) {
         let mut current_time_elapsed = self.time_elapsed.lock().unwrap();
         *current_time_elapsed = self.time_elapsed_previous_intervals + time_elapsed;
 
-        let total_time_elapsed = current_time_elapsed.clone();
+        let total_time_elapsed = *current_time_elapsed;
 
         // drop to release mutex lock asap
         drop(current_time_elapsed);
