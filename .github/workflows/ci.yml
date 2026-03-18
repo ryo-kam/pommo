@@ -20,7 +20,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: formatting check
-        run: cargo fmt --release --all -- --check
+        run: cargo fmt --all -- --check
 
       - name: clippy check
         run: cargo clippy --release --locked --workspace --all-features --all-targets -- -D clippy::all
