@@ -1,0 +1,49 @@
+name: ci
+run-name: ${{ github.workflow }}-${{ github.ref }}
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          copmonents: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: formatting check
+        run: cargo fmt --release --all -- --check
+
+      - name: clippy check
+        run: cargo clippy --release --locked --workspace --all-features --all-targets -- -D clippy::all
+
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    name: build and test on ${{ matrix.os }}
+    runs-on: ${{matrix.os}}
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: build
+        run: cargo build --release --locked --workspace --all-features --all-targets
+
+      - name: test
+        run: cargo test --release --locked --workspace --all-features --all-targets
