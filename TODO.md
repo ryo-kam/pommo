@@ -10,6 +10,8 @@
 
 ## Make it look nice
 
+## Refactor timer to be single threaded
+
 ## Get rid of the panic button
 
 ## Create custom error types
