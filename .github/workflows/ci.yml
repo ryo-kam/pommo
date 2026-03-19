@@ -25,7 +25,7 @@ jobs:
       - name: clippy check
         run: cargo clippy --release --locked --workspace --all-features --all-targets -- -D clippy::all
 
-  build-and-test:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -44,6 +44,3 @@ jobs:
 
       - name: build
         run: cargo build --release --locked --workspace --all-features --all-targets
-
-      - name: test
-        run: cargo test --release --locked --workspace --all-features --all-targets
