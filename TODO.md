@@ -17,3 +17,5 @@
 ## Create custom error types
 
 ## Get rid of all unwraps
+
+## Add dependabot
