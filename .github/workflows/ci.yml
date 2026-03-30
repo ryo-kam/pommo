@@ -10,5 +10,17 @@ run-name: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   lint-build-test:
     uses: ./.github/workflows/lint-build-test.yml
-
       
+  test:
+    needs: [lint-build-test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts/
+          merge-multiple: true
+      
+      - name: list directory
+        run: ls -R
