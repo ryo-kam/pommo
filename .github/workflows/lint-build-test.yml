@@ -1,6 +1,8 @@
 on:
     workflow_call
 
+name: lint-build-test
+
 jobs:
   lint:
     name: lint
