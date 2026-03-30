@@ -26,5 +26,5 @@ jobs:
       - name: release
         uses: softprops/action-gh-release@v2
         with:
-          files: pommo-*/pommo{.exe,}
+          files: pommo-*/pommo-*{.exe,}
           tag_name: ${{ github.ref_name }}
