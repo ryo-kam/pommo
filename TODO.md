@@ -10,3 +10,4 @@
 - Create custom error types
 - Get rid of all unwraps
 - Add dependabot
+- Fix arm64 linux build
