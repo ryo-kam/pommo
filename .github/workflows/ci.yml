@@ -10,5 +10,3 @@ run-name: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   lint-build-test:
     uses: ./.github/workflows/lint-build-test.yml
-
-      
