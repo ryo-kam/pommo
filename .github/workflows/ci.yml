@@ -25,11 +25,26 @@ jobs:
       - name: clippy check
         run: cargo clippy --release --locked --workspace --all-features --all-targets -- -D clippy::all
 
-  build:
+  build-and-test:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: pommo-linux-amd64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: pommo-linux-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: pommo-darwin-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: pommo-darwin-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: pommo-windows-amd64.exe
 
     name: build and test on ${{ matrix.os }}
     runs-on: ${{matrix.os}}
@@ -39,8 +54,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
 
       - name: build
-        run: cargo build --release --locked --workspace --all-features --all-targets
+        run: cargo build --release --all-targets --target ${{ matrix.target }}
+      
+      - name: test
+        run: cargo test --release --all-targets --target ${{ matrix.target }}
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/${{ matrix.os == 'windows-latest' && 'pommo.exe' || 'pommo' }}
+          retention-days: 1
