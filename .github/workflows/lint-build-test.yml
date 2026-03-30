@@ -59,9 +59,14 @@ jobs:
     - name: test
       run: cargo test --release --all-targets --target ${{ matrix.target }}
     
+    - name: rename artifact
+      shell: bash
+      run: |
+        cp target/${{ matrix.target }}/release/${{ matrix.os == 'windows-latest' && 'pommo.exe' || 'pommo' }} ${{ matrix.artifact }}
+    
     - name: upload artifact
       uses: actions/upload-artifact@v7
       with:
         name: ${{ matrix.artifact }}
-        path: target/${{ matrix.target }}/release/${{ matrix.os == 'windows-latest' && 'pommo.exe' || 'pommo' }}
+        path: ${{ matrix.artifact }}
         retention-days: 1
