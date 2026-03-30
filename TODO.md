@@ -1,5 +1,5 @@
 - ~~Refactor timer to be single threaded~~
-- Add CI to repo (lint, build, test, release)
+- ~~Add CI to repo (lint, build, test, release)~~
 - Add system notifications
 - Be able to tell how many work/break periods have passed and have left to go
 - Make it look nice
