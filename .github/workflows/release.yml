@@ -19,8 +19,6 @@ jobs:
     steps:
       - name: download build artifacts
         uses: actions/download-artifact@v8
-        with:
-          path: ~/artifacts
 
       - name: list dir
         run: ls -R
@@ -28,5 +26,5 @@ jobs:
       - name: release
         uses: softprops/action-gh-release@v2
         with:
-          files: ~/artifacts/pommo-*
+          files: pommo-*/pommo{.exe,}
           tag_name: ${{ github.ref_name }}
