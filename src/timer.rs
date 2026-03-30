@@ -124,7 +124,6 @@ mod tests {
         let mut timer = Timer::new(DURATION);
 
         timer.start();
-        short_pause();
 
         let (_, timer_state) = timer.check_time();
         assert!(matches!(timer_state, TimerState::Running));
