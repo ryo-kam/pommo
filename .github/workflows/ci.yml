@@ -46,7 +46,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact: pommo-windows-amd64.exe
 
-    name: build and test on ${{ matrix.os }}
+    name: build and test on ${{ matrix.os }} (${{ matrix.target }})
     runs-on: ${{matrix.os}}
 
     steps:
