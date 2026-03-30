@@ -38,10 +38,10 @@ jobs:
             artifact: pommo-linux-arm64
           - os: macos-latest
             target: x86_64-apple-darwin
-            artifact: pommo-darwin-amd64
+            artifact: pommo-macos-amd64
           - os: macos-latest
             target: aarch64-apple-darwin
-            artifact: pommo-darwin-arm64
+            artifact: pommo-macos-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: pommo-windows-amd64.exe
