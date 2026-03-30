@@ -11,7 +11,6 @@ pub enum TimerState {
 enum TimerCommand {
     Start,
     Pause,
-    End,
 }
 
 #[derive(Debug)]
@@ -43,7 +42,7 @@ impl Timer {
             return (Duration::ZERO, self.state);
         }
 
-        return (self.duration - time_elapsed, self.state);
+        (self.duration - time_elapsed, self.state)
     }
 
     pub fn pause(&mut self) {
@@ -52,10 +51,6 @@ impl Timer {
 
     pub fn start(&mut self) {
         self.send_command(TimerCommand::Start);
-    }
-
-    pub fn end(&mut self) {
-        self.send_command(TimerCommand::End);
     }
 
     fn send_command(&mut self, command: TimerCommand) {
@@ -76,7 +71,6 @@ impl Timer {
         match command {
             TimerCommand::Start => self.set_state(TimerState::Running),
             TimerCommand::Pause => self.set_state(TimerState::Paused),
-            TimerCommand::End => self.set_state(TimerState::Completed),
         };
     }
 
@@ -161,34 +155,6 @@ mod tests {
     }
 
     #[test]
-    fn can_end_timer_when_ticking() {
-        let mut timer = Timer::new(DURATION);
-
-        timer.start();
-        short_pause();
-        timer.end();
-        short_pause();
-
-        let (_, timer_state) = timer.check_time();
-        assert!(matches!(timer_state, TimerState::Completed));
-    }
-
-    #[test]
-    fn can_end_timer_when_paused() {
-        let mut timer = Timer::new(DURATION);
-
-        timer.start();
-        short_pause();
-        timer.pause();
-        short_pause();
-        timer.end();
-        short_pause();
-
-        let (_, timer_state) = timer.check_time();
-        assert!(matches!(timer_state, TimerState::Completed));
-    }
-
-    #[test]
     fn time_elapsed_is_accurate_when_paused() {
         let mut timer = Timer::new(DURATION);
 
@@ -197,23 +163,6 @@ mod tests {
         timer.start();
         short_pause();
         timer.pause();
-
-        let time_left_test = DURATION.saturating_sub(start_time_test.elapsed());
-
-        let (time_left_timer, _) = timer.check_time();
-        let time_difference = time_left_timer.abs_diff(time_left_test);
-        assert!(time_difference <= EPSILON);
-    }
-
-    #[test]
-    fn time_elapsed_is_accurate_when_ended_via_command() {
-        let mut timer = Timer::new(DURATION);
-
-        let start_time_test = Instant::now();
-
-        timer.start();
-        short_pause();
-        timer.end();
 
         let time_left_test = DURATION.saturating_sub(start_time_test.elapsed());
 
