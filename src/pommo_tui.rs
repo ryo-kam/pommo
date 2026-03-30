@@ -104,10 +104,10 @@ impl Widget for &mut PommoTui {
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        let time_left = self.session.timer.get_time_left().as_secs();
+        let (time_left, _) = self.session.timer.check_time();
 
-        let mins_left = time_left / 60;
-        let secs_left = time_left % 60;
+        let mins_left = time_left.as_secs() / 60;
+        let secs_left = time_left.as_secs() % 60;
 
         let pommo_type = match &self.session.current_pommo().pommo_type {
             PommoType::Break => "break",

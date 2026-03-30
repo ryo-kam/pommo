@@ -1,19 +1,6 @@
-mod timer_inner;
-mod timer_shared;
+use std::time::{Duration, Instant};
 
-pub use timer_inner::*;
-pub use timer_shared::*;
-
-use std::{
-    sync::{
-        Arc, Mutex,
-        mpsc::{SendError, Sender},
-    },
-    thread,
-    time::Duration,
-};
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TimerState {
     Ready,
     Running,
@@ -21,305 +8,258 @@ pub enum TimerState {
     Completed,
 }
 
-#[derive(Debug)]
-pub struct Timer {
-    command_tx: Sender<TimerCommand>,
-
-    duration: Duration,
-    time_elapsed: Arc<Mutex<Duration>>,
-    timer_inner_state: Arc<Mutex<TimerInnerState>>,
+enum TimerCommand {
+    Start,
+    Pause,
+    End,
 }
 
-impl Drop for Timer {
-    fn drop(&mut self) {
-        // send an end command just in case it's still running
-        // but don't check the result since it doesn't matter if it's already finished
-        let _ = self.end();
-    }
+#[derive(Debug)]
+pub struct Timer {
+    duration: Duration,
+
+    state: TimerState,
+    last_state_change_at: Instant,
+    time_elapsed_previous_intervals: Duration,
 }
 
 impl Timer {
     pub fn new(duration: Duration) -> Timer {
-        let (timer_inner, command_tx) = TimerInner::new(duration);
-
-        let timer = Timer {
-            command_tx,
+        Timer {
             duration,
-            time_elapsed: timer_inner.time_elapsed.clone(),
-            timer_inner_state: timer_inner.timer_state.clone(),
+            last_state_change_at: Instant::now(),
+            time_elapsed_previous_intervals: Duration::ZERO,
+            state: TimerState::Ready,
+        }
+    }
+
+    pub fn check_time(&mut self) -> (Duration, TimerState) {
+        let time_elapsed = self.get_time_elapsed();
+
+        if time_elapsed >= self.duration {
+            self.time_elapsed_previous_intervals = self.duration;
+            self.set_state(TimerState::Completed);
+
+            return (Duration::ZERO, self.state);
+        }
+
+        return (self.duration - time_elapsed, self.state);
+    }
+
+    pub fn pause(&mut self) {
+        self.send_command(TimerCommand::Pause);
+    }
+
+    pub fn start(&mut self) {
+        self.send_command(TimerCommand::Start);
+    }
+
+    pub fn end(&mut self) {
+        self.send_command(TimerCommand::End);
+    }
+
+    fn send_command(&mut self, command: TimerCommand) {
+        if self.state == TimerState::Completed {
+            return;
+        }
+
+        let time_elapsed = self.get_time_elapsed();
+
+        if time_elapsed >= self.duration {
+            self.time_elapsed_previous_intervals = self.duration;
+            self.set_state(TimerState::Completed);
+            return;
+        }
+
+        self.time_elapsed_previous_intervals = time_elapsed;
+
+        match command {
+            TimerCommand::Start => self.set_state(TimerState::Running),
+            TimerCommand::Pause => self.set_state(TimerState::Paused),
+            TimerCommand::End => self.set_state(TimerState::Completed),
         };
-
-        thread::spawn(|| timer_inner.run());
-
-        timer
     }
 
-    pub fn get_time_left(&self) -> Duration {
-        let time_elapsed = *self.time_elapsed.lock().unwrap();
-
-        self.duration.saturating_sub(time_elapsed)
-    }
-
-    pub fn get_state(&self) -> TimerState {
-        let time_elapsed = *self.time_elapsed.lock().unwrap();
-        let timer_inner_state = self.timer_inner_state.lock().unwrap().clone();
-
-        match (time_elapsed, timer_inner_state) {
-            (time_elapsed, TimerInnerState::Paused) if time_elapsed.is_zero() => TimerState::Ready,
-            (_, TimerInnerState::Paused) => TimerState::Paused,
-            (_, TimerInnerState::Ticking { .. }) => TimerState::Running,
-            (_, TimerInnerState::Finished) => TimerState::Completed,
+    fn get_time_elapsed(&self) -> Duration {
+        if self.state == TimerState::Running {
+            self.time_elapsed_previous_intervals + self.last_state_change_at.elapsed()
+        } else {
+            self.time_elapsed_previous_intervals
         }
     }
 
-    pub fn pause(&self) -> Result<(), SendError<TimerCommand>> {
-        self.send_command(TimerCommandType::Pause)
-    }
-
-    pub fn start(&self) -> Result<(), SendError<TimerCommand>> {
-        self.send_command(TimerCommandType::Start)
-    }
-
-    pub fn end(&self) -> Result<(), SendError<TimerCommand>> {
-        self.send_command(TimerCommandType::End)
-    }
-
-    fn send_command(&self, command_type: TimerCommandType) -> Result<(), SendError<TimerCommand>> {
-        if *self.timer_inner_state.lock().unwrap() == TimerInnerState::Finished {
-            return Ok(());
-        }
-
-        self.command_tx.send(TimerCommand::new(command_type))
+    fn set_state(&mut self, state: TimerState) {
+        self.state = state;
+        self.last_state_change_at = Instant::now();
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Instant;
+    use std::{thread, time::Instant};
 
     use super::*;
 
-    const LOOP_TIME: Duration = Duration::from_millis(10);
-
     /// an arbitrary acceptable error for difference in time
-    const EPSILON: Duration = Duration::from_micros(100);
+    const EPSILON: Duration = Duration::from_millis(1);
 
-    /// LOOP_TIME + EPSILON pause about the time it takes to complete a loop and process a command
-    fn small_pause() {
-        thread::sleep(LOOP_TIME + EPSILON);
+    const DURATION: Duration = Duration::from_millis(50);
+
+    /// pause not long enough to complete the timer
+    fn short_pause() {
+        thread::sleep(Duration::from_millis(5));
     }
 
-    /// 500ms pause to make sure it completes a few loops when ticking
-    fn medium_pause() {
-        thread::sleep(Duration::from_millis(500));
-    }
-
-    /// 2s pause to simulate it actually ticking for a few seconds
+    /// long enough pause to complete the timer
     fn long_pause() {
-        thread::sleep(Duration::from_secs(2));
+        thread::sleep(Duration::from_millis(60));
     }
 
     #[test]
     fn instantiates_with_correct_values() {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+        let timer = Timer::new(DURATION);
 
-        let duration_timer = timer.duration;
-        assert_eq!(duration_timer, duration);
-
-        let timer_state = timer.get_state();
-        assert!(matches!(timer_state, TimerState::Ready));
-
-        let time_elapsed_timer = timer.time_elapsed.lock().unwrap();
-        assert!(time_elapsed_timer.is_zero());
+        assert_eq!(timer.duration, DURATION);
+        assert!(matches!(timer.state, TimerState::Ready));
+        assert!(timer.time_elapsed_previous_intervals.is_zero());
+        assert!(Instant::now() - timer.last_state_change_at < EPSILON);
     }
 
     #[test]
-    fn can_start_timer() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn can_start_timer() {
+        let mut timer = Timer::new(DURATION);
 
-        timer.start()?;
-        small_pause();
+        timer.start();
+        short_pause();
 
-        let timer_state = timer.get_state();
+        let (_, timer_state) = timer.check_time();
         assert!(matches!(timer_state, TimerState::Running));
-
-        Ok(())
     }
 
     #[test]
-    fn timer_finishes_when_run_for_duration() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn timer_finishes_when_run_for_duration() {
+        let mut timer = Timer::new(DURATION);
 
-        timer.start()?;
-        thread::sleep(duration + LOOP_TIME);
+        timer.start();
+        long_pause();
 
-        let timer_state = timer.get_state();
+        let (time_left, timer_state) = timer.check_time();
         assert!(matches!(timer_state, TimerState::Completed));
-
-        Ok(())
+        assert!(time_left.is_zero());
     }
 
     #[test]
-    fn can_pause_timer_when_ticking() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn can_pause_timer_when_ticking() {
+        let mut timer = Timer::new(DURATION);
 
-        timer.start()?;
-        medium_pause();
-        timer.pause()?;
-        small_pause();
+        timer.start();
+        short_pause();
+        timer.pause();
 
-        let timer_state = timer.get_state();
+        let (_, timer_state) = timer.check_time();
         assert!(matches!(timer_state, TimerState::Paused));
-
-        Ok(())
     }
 
     #[test]
-    fn can_end_timer_when_ticking() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn can_end_timer_when_ticking() {
+        let mut timer = Timer::new(DURATION);
 
-        timer.start()?;
-        medium_pause();
-        timer.end()?;
-        small_pause();
+        timer.start();
+        short_pause();
+        timer.end();
+        short_pause();
 
-        let timer_state = timer.get_state();
+        let (_, timer_state) = timer.check_time();
         assert!(matches!(timer_state, TimerState::Completed));
-
-        Ok(())
     }
 
     #[test]
-    fn can_end_timer_when_paused() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn can_end_timer_when_paused() {
+        let mut timer = Timer::new(DURATION);
 
-        timer.start()?;
-        medium_pause();
-        timer.pause()?;
-        small_pause();
-        timer.end()?;
-        small_pause();
+        timer.start();
+        short_pause();
+        timer.pause();
+        short_pause();
+        timer.end();
+        short_pause();
 
-        let timer_state = timer.get_state();
+        let (_, timer_state) = timer.check_time();
         assert!(matches!(timer_state, TimerState::Completed));
-
-        Ok(())
     }
 
     #[test]
-    fn time_elapsed_is_accurate_when_paused() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn time_elapsed_is_accurate_when_paused() {
+        let mut timer = Timer::new(DURATION);
 
         let start_time_test = Instant::now();
 
-        timer.start()?;
-        medium_pause();
-        timer.pause()?;
+        timer.start();
+        short_pause();
+        timer.pause();
 
-        // get the time here to get the most accurate time between start and pause command being issued
-        let time_elapsed_test = dbg!(start_time_test.elapsed());
+        let time_left_test = DURATION.saturating_sub(start_time_test.elapsed());
 
-        // wait for it to process the command
-        small_pause();
-
-        let time_elapsed_timer = timer.time_elapsed.lock().unwrap();
-        let time_difference = time_elapsed_timer.abs_diff(time_elapsed_test);
+        let (time_left_timer, _) = timer.check_time();
+        let time_difference = time_left_timer.abs_diff(time_left_test);
         assert!(time_difference <= EPSILON);
-
-        Ok(())
     }
 
     #[test]
-    fn time_elapsed_is_accurate_when_ended_via_command() -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn time_elapsed_is_accurate_when_ended_via_command() {
+        let mut timer = Timer::new(DURATION);
 
         let start_time_test = Instant::now();
 
-        timer.start()?;
-        medium_pause();
-        timer.end()?;
+        timer.start();
+        short_pause();
+        timer.end();
 
-        // get the time here to get the most accurate time between start and pause command being issued
-        let time_elapsed_test = start_time_test.elapsed();
+        let time_left_test = DURATION.saturating_sub(start_time_test.elapsed());
 
-        // wait for it to process the command
-        small_pause();
-
-        let time_elapsed_timer = timer.time_elapsed.lock().unwrap();
-        let time_difference = time_elapsed_timer.abs_diff(time_elapsed_test);
+        let (time_left_timer, _) = timer.check_time();
+        let time_difference = time_left_timer.abs_diff(time_left_test);
         assert!(time_difference <= EPSILON);
-
-        Ok(())
     }
 
     #[test]
-    fn time_elapsed_is_accurate_when_ended_from_hitting_target()
-    -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
-
-        timer.start()?;
-        thread::sleep(duration + LOOP_TIME);
-
-        let time_elapsed_timer = timer.time_elapsed.lock().unwrap();
-        let time_difference = time_elapsed_timer.abs_diff(duration);
-        assert!(time_difference <= LOOP_TIME + EPSILON);
-
-        Ok(())
-    }
-
-    #[test]
-    fn time_elapsed_is_accurate_within_loop_time_while_ticking()
-    -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(2);
-        let timer = Timer::new(duration);
+    fn time_elapsed_is_accurate_while_ticking() {
+        let mut timer = Timer::new(DURATION);
 
         let start_time_test = Instant::now();
 
-        timer.start()?;
-        medium_pause();
+        timer.start();
+        short_pause();
 
-        let time_elapsed_timer = timer.time_elapsed.lock().unwrap();
-        let time_elapsed_test = start_time_test.elapsed();
-        let time_difference = time_elapsed_timer.abs_diff(time_elapsed_test);
-        assert!(time_difference <= LOOP_TIME + EPSILON);
+        let time_left_test = DURATION.saturating_sub(start_time_test.elapsed());
 
-        Ok(())
+        let (time_left_timer, _) = timer.check_time();
+        let time_difference = time_left_timer.abs_diff(time_left_test);
+        assert!(time_difference <= EPSILON);
     }
 
     #[test]
-    fn time_elapsed_is_accurate_when_paused_and_unpaused_repeatedly()
-    -> Result<(), SendError<TimerCommand>> {
-        let duration = Duration::from_secs(20);
-        let timer = Timer::new(duration);
+    fn time_elapsed_is_accurate_when_paused_and_unpaused_repeatedly() {
+        let mut timer = Timer::new(DURATION);
 
         let mut time_elapsed_test = Duration::ZERO;
 
         for _ in 0..5 {
             let start_time_test = Instant::now();
 
-            timer.start()?;
-            long_pause();
-            timer.pause()?;
+            timer.start();
+            short_pause();
+            timer.pause();
 
             time_elapsed_test += start_time_test.elapsed();
 
-            small_pause();
+            short_pause();
         }
 
-        dbg!(time_elapsed_test);
-        let time_elapsed_timer = dbg!(timer.time_elapsed.lock().unwrap());
-        let time_difference = dbg!(time_elapsed_timer.abs_diff(time_elapsed_test));
-        assert!(time_difference <= EPSILON);
+        let time_left_test = DURATION.saturating_sub(time_elapsed_test);
 
-        Ok(())
+        let (time_left_timer, _) = timer.check_time();
+        let time_difference = time_left_timer.abs_diff(time_left_test);
+        assert!(time_difference <= EPSILON);
     }
 }

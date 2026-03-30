@@ -63,12 +63,12 @@ impl PommoSession {
     }
 
     pub fn toggle_timer(&mut self) {
-        match self.timer.get_state() {
-            TimerState::Ready | TimerState::Paused => self.timer.start().unwrap(),
-            TimerState::Running => self.timer.pause().unwrap(),
-            TimerState::Completed => {
+        match self.timer.check_time() {
+            (_, TimerState::Ready | TimerState::Paused) => self.timer.start(),
+            (_, TimerState::Running) => self.timer.pause(),
+            (_, TimerState::Completed) => {
                 self.next_pommo();
-                self.timer.start().unwrap();
+                self.timer.start();
             }
         }
     }

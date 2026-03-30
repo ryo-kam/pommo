@@ -1,4 +1,4 @@
-- Refactor timer to be single threaded
+- ~~Refactor timer to be single threaded~~
 - Add CI to repo
 - Add system notifications
 - Be able to tell how many work/break periods have passed and have left to go
