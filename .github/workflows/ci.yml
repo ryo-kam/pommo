@@ -70,3 +70,24 @@ jobs:
           name: ${{ matrix.artifact }}
           path: target/${{ matrix.target }}/release/${{ matrix.os == 'windows-latest' && 'pommo.exe' || 'pommo' }}
           retention-days: 1
+    
+  release:
+    needs: [build-and-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: true
+    
+      - name: release
+        uses: softprops/action-gh-release@v2
+        with:
+          workingDirectory: artifacts/
+          files: /*
+
+      
