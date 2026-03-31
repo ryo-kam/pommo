@@ -12,12 +12,17 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
-use crate::pommo_core::{PommoSession, PommoType};
+use crate::{
+    notifications::NotificationManger,
+    pommo_core::{PommoSession, PommoType},
+    timer::TimerState,
+};
 
 #[derive(Debug)]
 pub struct PommoTui {
     session: PommoSession,
     is_running: bool,
+    notification_manager: NotificationManger,
 }
 
 impl Default for PommoTui {
@@ -31,6 +36,7 @@ impl PommoTui {
         Self {
             session: PommoSession::new(),
             is_running: true,
+            notification_manager: NotificationManger::new(),
         }
     }
 
@@ -104,7 +110,13 @@ impl Widget for &mut PommoTui {
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        let (time_left, _) = self.session.timer.check_time();
+        let (time_left, timer_state) = self.session.timer.check_time();
+
+        if timer_state == TimerState::Completed {
+            let current_pommo_type = self.session.current_pommo().pommo_type;
+
+            self.notification_manager.notify(current_pommo_type);
+        }
 
         let mins_left = time_left.as_secs() / 60;
         let secs_left = time_left.as_secs() % 60;

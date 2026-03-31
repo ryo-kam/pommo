@@ -33,7 +33,7 @@ pub struct Pommo {
     pub pommo_type: PommoType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PommoType {
     Break,
     Work,

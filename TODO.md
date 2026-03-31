@@ -1,6 +1,6 @@
 - ~~Refactor timer to be single threaded~~
 - ~~Add CI to repo (lint, build, test, release)~~
-- Add system notifications
+- ~~Add system notifications~~
 - Be able to tell how many work/break periods have passed and have left to go
 - Make it look nice
 - Add settings to turn on/off system notifications
@@ -11,3 +11,5 @@
 - Get rid of all unwraps
 - Add dependabot
 - Fix arm64 linux build
+- Add separate notification types for long and short breaks
+- Add actions to notifications
