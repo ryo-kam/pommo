@@ -1,15 +1,15 @@
-- ~~Refactor timer to be single threaded~~
-- ~~Add CI to repo (lint, build, test, release)~~
-- ~~Add system notifications~~
-- Be able to tell how many work/break periods have passed and have left to go
-- Make it look nice
-- Add settings to turn on/off system notifications
-- Persist settings between sessions
-- Add changesets
-- Get rid of the panic button
-- Create custom error types
-- Get rid of all unwraps
-- Add dependabot
-- Fix arm64 linux build
-- Add separate notification types for long and short breaks
-- Add actions to notifications
+- [x] Refactor timer to be single threaded
+- [x] Add CI to repo (lint, build, test, release)
+- [x] Add system notifications
+- [ ] Be able to tell how many work/break periods have passed and have left to go
+- [ ] Make it look nice
+- [ ] Add settings to turn on/off system notifications
+- [ ] Persist settings between sessions
+- [ ] Add changesets
+- [ ] Get rid of the panic button
+- [ ] Create custom error types
+- [ ] Get rid of all unwraps
+- [ ] Add dependabot
+- [ ] Fix arm64 linux build
+- [ ] Add separate notification types for long and short breaks
+- [ ] Add actions to notifications
