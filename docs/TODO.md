@@ -1,7 +1,7 @@
 - [x] Refactor timer to be single threaded
 - [x] Add CI to repo (lint, build, test, release)
 - [x] Add system notifications
-- [ ] [Show how many work/break periods have passed and have left to go](/todo/show-all-periods.md)
+- [ ] [Show how many work/break periods have passed and have left to go](/docs/designs/show-list-of-pommos.excalidraw.png)
 - [ ] Make it look nice
 - [ ] Add settings to turn on/off system notifications
 - [ ] Persist settings between sessions
