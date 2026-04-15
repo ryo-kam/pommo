@@ -17,7 +17,7 @@ const WORK: Pommo = Pommo {
     duration: Duration::from_mins(25),
 };
 
-const POMMOS: &[Pommo] = &[
+pub const POMMOS: &[Pommo] = &[
     WORK,
     SHORT_BREAK,
     WORK,
@@ -42,7 +42,7 @@ pub enum PommoType {
 #[derive(Debug)]
 pub struct PommoSession {
     pub timer: Timer,
-    current_pommo_index: usize,
+    pub current_pommo_index: usize,
 }
 
 impl PommoSession {
